@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
-type TabType = 'servers' | 'chats' | 'contacts' | 'notifications' | 'settings';
+type TabType = 'servers' | 'chats' | 'contacts' | 'notifications' | 'settings' | 'explore';
 
 interface SidebarProps {
   activeTab: TabType;
@@ -16,6 +16,7 @@ export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   const tabs = [
     { id: 'servers' as TabType, icon: 'LayoutGrid', label: 'Серверы', badge: null },
     { id: 'chats' as TabType, icon: 'MessageCircle', label: 'Чаты', badge: 3 },
+    { id: 'explore' as TabType, icon: 'Compass', label: 'Путешествия', badge: null },
     { id: 'contacts' as TabType, icon: 'Users', label: 'Контакты', badge: null },
     { id: 'notifications' as TabType, icon: 'Bell', label: 'Уведомления', badge: 5 },
     { id: 'settings' as TabType, icon: 'Settings', label: 'Параметры', badge: null },
