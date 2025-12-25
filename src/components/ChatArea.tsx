@@ -5,6 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import StickerPicker from './StickerPicker';
+import VoiceRecorder from './VoiceRecorder';
+import CallModal from './CallModal';
 
 interface Message {
   id: number;
@@ -12,6 +15,8 @@ interface Message {
   timestamp: string;
   username: string;
   avatar: string;
+  type?: 'text' | 'sticker' | 'voice';
+  duration?: number;
 }
 
 interface ChatAreaProps {
@@ -25,6 +30,10 @@ export default function ChatArea({ chatId = 1, chatName = 'Общий чат' }:
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [showCallModal, setShowCallModal] = useState(false);
+  const [callType, setCallType] = useState<'audio' | 'video'>('audio');
 
   const loadMessages = async () => {
     try {
@@ -42,8 +51,9 @@ export default function ChatArea({ chatId = 1, chatName = 'Общий чат' }:
     return () => clearInterval(interval);
   }, [chatId]);
 
-  const handleSend = async () => {
-    if (message.trim() && !loading) {
+  const handleSend = async (content?: string, type: 'text' | 'sticker' | 'voice' = 'text', duration?: number) => {
+    const messageContent = content || message.trim();
+    if (messageContent && !loading) {
       setLoading(true);
       try {
         const response = await fetch(API_URL, {
@@ -53,14 +63,14 @@ export default function ChatArea({ chatId = 1, chatName = 'Общий чат' }:
           },
           body: JSON.stringify({
             chat_id: chatId,
-            content: message.trim(),
+            content: messageContent,
             user_id: 1,
           }),
         });
 
         if (response.ok) {
           const newMessage = await response.json();
-          setMessages([...messages, newMessage]);
+          setMessages([...messages, { ...newMessage, type, duration }]);
           setMessage('');
         }
       } catch (error) {
@@ -71,13 +81,33 @@ export default function ChatArea({ chatId = 1, chatName = 'Общий чат' }:
     }
   };
 
+  const handleStickerSelect = (sticker: string) => {
+    handleSend(sticker, 'sticker');
+  };
+
+  const handleVoiceSend = (duration: number) => {
+    handleSend(`Голосовое сообщение ${duration}с`, 'voice', duration);
+    setIsRecording(false);
+  };
+
+  const startCall = (type: 'audio' | 'video') => {
+    setCallType(type);
+    setShowCallModal(true);
+  };
+
   const formatTime = (timestamp: string) => {
     const date = new Date(timestamp);
     return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
   };
 
+  const formatVoiceDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   return (
-    <div className="flex-1 flex flex-col bg-background">
+    <div className="flex-1 flex flex-col bg-background relative">
       <div className="h-16 border-b border-border px-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Icon name="Hash" size={20} className="text-muted-foreground" />
@@ -86,10 +116,20 @@ export default function ChatArea({ chatId = 1, chatName = 'Общий чат' }:
         </div>
         
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="gradient-blue text-white hover:opacity-90">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="gradient-blue text-white hover:opacity-90"
+            onClick={() => startCall('audio')}
+          >
             <Icon name="Phone" size={20} />
           </Button>
-          <Button variant="ghost" size="icon" className="gradient-purple text-white hover:opacity-90">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="gradient-purple text-white hover:opacity-90"
+            onClick={() => startCall('video')}
+          >
             <Icon name="Video" size={20} />
           </Button>
           <Button variant="ghost" size="icon">
@@ -122,15 +162,46 @@ export default function ChatArea({ chatId = 1, chatName = 'Общий чат' }:
                     <span className="font-semibold text-sm">{msg.username}</span>
                     <span className="text-xs text-muted-foreground">{formatTime(msg.timestamp)}</span>
                   </div>
-                  <div
-                    className={`inline-block px-4 py-2 rounded-2xl ${
-                      isOwn
-                        ? 'gradient-purple text-white'
-                        : 'bg-card text-card-foreground'
-                    }`}
-                  >
-                    <p className="text-sm">{msg.content}</p>
-                  </div>
+                  
+                  {msg.type === 'sticker' ? (
+                    <div className="text-6xl inline-block">{msg.content}</div>
+                  ) : msg.type === 'voice' ? (
+                    <div
+                      className={`inline-flex items-center gap-3 px-4 py-2 rounded-2xl ${
+                        isOwn
+                          ? 'gradient-purple text-white'
+                          : 'bg-card text-card-foreground'
+                      }`}
+                    >
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 rounded-full hover:bg-white/20"
+                      >
+                        <Icon name="Play" size={16} />
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: 15 }).map((_, i) => (
+                          <div
+                            key={i}
+                            className={`w-1 ${isOwn ? 'bg-white' : 'bg-primary'} rounded-full`}
+                            style={{ height: `${Math.random() * 16 + 4}px` }}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-xs font-mono">{formatVoiceDuration(msg.duration || 0)}</span>
+                    </div>
+                  ) : (
+                    <div
+                      className={`inline-block px-4 py-2 rounded-2xl ${
+                        isOwn
+                          ? 'gradient-purple text-white'
+                          : 'bg-card text-card-foreground'
+                      }`}
+                    >
+                      <p className="text-sm">{msg.content}</p>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -139,34 +210,65 @@ export default function ChatArea({ chatId = 1, chatName = 'Общий чат' }:
       </ScrollArea>
 
       <div className="p-4 border-t border-border">
-        <div className="flex items-center gap-2 bg-card rounded-xl px-4 py-2">
-          <Button variant="ghost" size="icon" className="h-8 w-8">
-            <Icon name="Plus" size={20} />
-          </Button>
-          <Input
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Написать сообщение..."
-            className="border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
-            disabled={loading}
+        {isRecording ? (
+          <VoiceRecorder
+            onSend={handleVoiceSend}
+            onCancel={() => setIsRecording(false)}
           />
-          <Button variant="ghost" size="icon" className="h-8 w-8">
-            <Icon name="Smile" size={20} />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8">
-            <Icon name="Mic" size={20} />
-          </Button>
-          <Button
-            onClick={handleSend}
-            size="icon"
-            className="h-8 w-8 gradient-purple text-white hover:opacity-90"
-            disabled={loading}
-          >
-            <Icon name="Send" size={16} />
-          </Button>
-        </div>
+        ) : (
+          <div className="flex items-center gap-2 bg-card rounded-xl px-4 py-2">
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <Icon name="Plus" size={20} />
+            </Button>
+            <Input
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+              placeholder="Написать сообщение..."
+              className="border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+              disabled={loading}
+            />
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8"
+              onClick={() => setShowStickerPicker(!showStickerPicker)}
+            >
+              <Icon name="Smile" size={20} />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8"
+              onClick={() => setIsRecording(true)}
+            >
+              <Icon name="Mic" size={20} />
+            </Button>
+            <Button
+              onClick={() => handleSend()}
+              size="icon"
+              className="h-8 w-8 gradient-purple text-white hover:opacity-90"
+              disabled={loading}
+            >
+              <Icon name="Send" size={16} />
+            </Button>
+          </div>
+        )}
       </div>
+
+      {showStickerPicker && (
+        <StickerPicker
+          onSelect={handleStickerSelect}
+          onClose={() => setShowStickerPicker(false)}
+        />
+      )}
+
+      <CallModal
+        isOpen={showCallModal}
+        onClose={() => setShowCallModal(false)}
+        userName={chatName}
+        callType={callType}
+      />
     </div>
   );
 }
